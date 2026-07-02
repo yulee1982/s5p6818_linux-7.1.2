@@ -241,7 +241,9 @@ SYM_FUNC_START_LOCAL(__primary_switched)
 	bl	kasan_early_init
 #endif
 	mov	x0, x20
+#ifndef CONFIG_ARCH_S5P6818
 	bl	finalise_el2			// Prefer VHE if possible
+#endif
 	ldp	x29, x30, [sp], #16
 	bl	start_kernel
 	ASM_BUG()
@@ -314,9 +316,11 @@ SYM_INNER_LABEL(init_el2, SYM_L_LOCAL)
 	cbz	x0, 2f
 
 	/* Set a sane SCTLR_EL1, the VHE way */
+#ifndef CONFIG_ARCH_S5P6818
 	msr_s	SYS_SCTLR_EL12, x1
 	mov	x2, #BOOT_CPU_FLAG_E2H
 	b	3f
+#endif
 
 2:
 	msr	sctlr_el1, x1
@@ -384,7 +388,9 @@ SYM_FUNC_START_LOCAL(__secondary_switched)
 	bl	set_cpu_boot_mode_flag
 
 	mov	x0, x20
-	bl	finalise_el2
+#ifndef CONFIG_ARCH_S5P6818
+	bl	finalise_el2			// Prefer VHE if possible
+#endif
 
 	str_l	xzr, __early_cpu_boot_status, x3
 	adr_l	x5, vectors
