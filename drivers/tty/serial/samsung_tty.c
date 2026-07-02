@@ -42,6 +42,7 @@
 #include <linux/tty.h>
 #include <linux/tty_flip.h>
 #include <linux/types.h>
+#include <linux/reset.h>
 
 #include <asm/irq.h>
 
@@ -52,7 +53,11 @@
 #define S3C24XX_SERIAL_MINOR	64
 
 #ifdef CONFIG_ARM64
+#ifdef CONFIG_ARCH_S5P6818
+#define UART_NR			CONFIG_SERIAL_SAMSUNG_UARTS
+#else
 #define UART_NR			18
+#endif
 #else
 #define UART_NR			CONFIG_SERIAL_SAMSUNG_UARTS
 #endif
@@ -90,6 +95,7 @@ struct s3c24xx_uart_info {
 
 	/* uart port features */
 	bool			has_divslot;
+	bool			has_reset_control;
 };
 
 struct s3c24xx_serial_drv_data {
@@ -2007,6 +2013,25 @@ static int s3c24xx_serial_probe(struct platform_device *pdev)
 			ourport->port.fifosize = ourport->info->fifosize;
 	}
 
+	/*
+	 * patch for s5p6818
+	 * s5p6818 uart needs reset before enabled
+	 */
+#ifdef CONFIG_RESET_CONTROLLER
+	if (ourport->info->has_reset_control) {
+		struct reset_control *rst;
+
+		rst = devm_reset_control_get(&pdev->dev, "uart-reset");
+		if (IS_ERR(rst)) {
+			dev_err(&pdev->dev, "failed to get reset control\n");
+			return -EINVAL;
+		}
+		if (reset_control_status(rst))
+			reset_control_reset(rst);
+        reset_control_put(rst);
+	}
+#endif
+
 	ourport->port.has_sysrq = IS_ENABLED(CONFIG_SERIAL_SAMSUNG_CONSOLE);
 
 	/*
@@ -2096,6 +2121,23 @@ static int s3c24xx_serial_resume_noirq(struct device *dev)
 	struct s3c24xx_uart_port *ourport = to_ourport(port);
 
 	if (port) {
+		/*
+		 * patch for s5p6818
+		 * s5p6818 uart needs reset before enabled
+		 */
+#ifdef CONFIG_RESET_CONTROLLER
+		if (ourport->info->has_reset_control) {
+			struct reset_control *rst;
+
+			rst = devm_reset_control_get(dev, "uart-reset");
+			if (!rst) {
+				dev_err(dev, "failed to get reset control\n");
+				return -EINVAL;
+			}
+            		reset_control_reset(rst);
+            		reset_control_put(rst);
+		}
+#endif
 		/* restore IRQ mask */
 		switch (ourport->info->type) {
 		case TYPE_S3C6400: {
@@ -2594,6 +2636,38 @@ static const struct s3c24xx_serial_drv_data artpec8_serial_drv_data = {
 #define ARTPEC8_SERIAL_DRV_DATA (NULL)
 #endif
 
+#if defined(CONFIG_ARCH_S5P6818)
+static const struct s3c24xx_serial_drv_data nexell_serial_drv_data = {
+	.info = {
+		.name		= "Nexell UART",
+		.type		= TYPE_S3C6400,
+		.port_type	= PORT_S3C6400,
+		.iotype		= UPIO_MEM,
+		.has_divslot	= true,
+		.has_reset_control = true,
+		.rx_fifomask	= S5PV210_UFSTAT_RXMASK,
+		.rx_fifoshift	= S5PV210_UFSTAT_RXSHIFT,
+		.rx_fifofull	= S5PV210_UFSTAT_RXFULL,
+		.tx_fifofull	= S5PV210_UFSTAT_TXFULL,
+		.tx_fifomask	= S5PV210_UFSTAT_TXMASK,
+		.tx_fifoshift	= S5PV210_UFSTAT_TXSHIFT,
+		.def_clk_sel	= S3C2410_UCON_CLKSEL0,
+		.num_clks	= 1,
+		.clksel_mask	= 0,
+		.clksel_shift	= 0,
+	},
+	.def_cfg = {
+		.ucon		= S5PV210_UCON_DEFAULT,
+		.ufcon		= S5PV210_UFCON_DEFAULT,
+		.has_fracval	= 1,
+	},
+	.fifosize = { 256, 64, 16, 16, 16, 16 },
+};
+#define NEXELL_SERIAL_DRV_DATA (&nexell_serial_drv_data)
+#else
+#define NEXELL_SERIAL_DRV_DATA	NULL
+#endif
+
 static const struct platform_device_id s3c24xx_serial_driver_ids[] = {
 	{
 		.name		= "s3c6400-uart",
@@ -2622,6 +2696,9 @@ static const struct platform_device_id s3c24xx_serial_driver_ids[] = {
 	}, {
 		.name		= "exynos8895-uart",
 		.driver_data	= (kernel_ulong_t)EXYNOS8895_SERIAL_DRV_DATA,
+	}, {
+		.name		= "s5p6818-uart",
+		.driver_data	= (kernel_ulong_t)NEXELL_SERIAL_DRV_DATA,
 	},
 	{ },
 };
@@ -2647,6 +2724,8 @@ static const struct of_device_id s3c24xx_uart_dt_match[] = {
 		.data = GS101_SERIAL_DRV_DATA },
 	{ .compatible = "samsung,exynos8895-uart",
 		.data = EXYNOS8895_SERIAL_DRV_DATA },
+	{ .compatible = "nexell,s5p6818-uart",
+		.data = NEXELL_SERIAL_DRV_DATA },
 	{},
 };
 MODULE_DEVICE_TABLE(of, s3c24xx_uart_dt_match);
@@ -2818,7 +2897,9 @@ OF_EARLYCON_DECLARE(artpec8, "axis,artpec8-uart",
 			s5pv210_early_console_setup);
 OF_EARLYCON_DECLARE(exynos850, "samsung,exynos850-uart",
 			s5pv210_early_console_setup);
-
+OF_EARLYCON_DECLARE(s5p6818, "nexell,s5p6818-uart",
+			s5pv210_early_console_setup);
+			
 static int __init gs101_early_console_setup(struct earlycon_device *device,
 					    const char *opt)
 {
