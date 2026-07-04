@@ -98,10 +98,14 @@ static inline u32 arch_timer_get_rate(void)
 	return 0;
 }
 
+#ifdef CONFIG_ARCH_S5P6818
+extern u64 arch_timer_read_counter(void);
+#else
 static inline u64 arch_timer_read_counter(void)
 {
 	return 0;
 }
+#endif
 
 static inline bool arch_timer_evtstrm_available(void)
 {

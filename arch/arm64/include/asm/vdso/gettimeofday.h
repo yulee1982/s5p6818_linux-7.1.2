@@ -17,6 +17,10 @@
 #include <asm/unistd.h>
 #include <asm/sysreg.h>
 
+#ifdef CONFIG_ARCH_S5P6818
+#include <clocksource/arm_arch_timer.h>
+#endif
+
 #define VDSO_HAS_CLOCK_GETRES		1
 
 static __always_inline
@@ -82,7 +86,12 @@ static __always_inline u64 __arch_get_hw_counter(s32 clock_mode,
 	if (clock_mode == VDSO_CLOCKMODE_NONE)
 		return 0;
 
+#ifndef CONFIG_ARCH_S5P6818
 	return __arch_counter_get_cntvct();
+#else
+	//return arch_timer_read_counter();
+	return 0;
+#endif
 }
 
 #if IS_ENABLED(CONFIG_CC_IS_GCC) && IS_ENABLED(CONFIG_PAGE_SIZE_64KB)

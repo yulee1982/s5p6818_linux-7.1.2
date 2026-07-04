@@ -151,6 +151,7 @@ u64 arch_timer_reg_read_cp15(int access, enum arch_timer_reg reg)
 	unreachable();
 }
 
+#ifdef CONFIG_ARM_ARCH_TIMER
 static inline u32 arch_timer_get_cntfrq(void)
 {
 	return read_sysreg(cntfrq_el0);
@@ -213,6 +214,40 @@ static inline int arch_timer_arch_init(void)
 {
 	return 0;
 }
+#else
+static inline u32 arch_timer_get_cntfrq(void)
+{
+	return 0;
+}
+
+static inline u32 arch_timer_get_cntkctl(void)
+{
+	return 0;
+}
+
+static inline void arch_timer_set_cntkctl(u32 cntkctl)
+{
+}
+
+static __always_inline u64 __arch_counter_get_cntpct_stable(void)
+{
+	return 0;
+}
+
+static __always_inline u64 __arch_counter_get_cntpct(void)
+{
+	return 0;
+}
+
+static __always_inline u64 __arch_counter_get_cntvct_stable(void)
+{
+	return 0;
+}
+
+extern u64 __arch_counter_get_cntvct(void);
+extern int arch_timer_arch_init(void);
+
+#endif
 
 static inline void arch_timer_set_evtstrm_feature(void)
 {

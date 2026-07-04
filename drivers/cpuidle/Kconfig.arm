@@ -130,3 +130,10 @@ config ARM_QCOM_SPM_CPUIDLE
 	  The Subsystem Power Manager (SPM) controls low power modes for the
 	  CPU and L2 cores. It interface with various system drivers to put
 	  the cores in low power modes.
+
+config ARM_NEXELL_CPUIDLE
+	bool "Cpu Idle Driver for the nexell processors"
+	depends on ARCH_S5P4418  || ARCH_S5P6818
+	select DT_IDLE_STATES
+	help
+	  Select this to enable cpuidle for Nexell processors
